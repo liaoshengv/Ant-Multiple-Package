@@ -1,0 +1,9 @@
+#Tue, 29 Dec 2015 09:50:32 +0800
+
+build.last.is.packaging.debug=true
+
+auto.package=com.rd.mbservice
+auto.final.versionCode=321
+auto.final.versionName=V3.2.1
+auto.project.tmp.dir=D\:\\workspace\\BussinessTmp
+auto.umeng.channel=release

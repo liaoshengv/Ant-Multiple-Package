@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="custom_rules">
+	  <target name="auto-copy-workspace">
+	    	 <dirname property="auto.here.dir" file="${ant.file}" />
+        <property name="auto.project.tmp.dir" value="${auto.here.dir}Tmp" />
+        <delete dir="${auto.project.tmp.dir}" />
+        <copy todir="${auto.project.tmp.dir}" overwrite="true">
+            <fileset dir="./">
+                <!-- 忽略隐藏文件 -->
+                <exclude name=".*" />
+                <exclude name=".*/*" />
+            </fileset>
+        </copy>
+	  </target>
+    <target name="auto-debug">
+        <property name="build.last.is.packaging.debug" value="true" />
+        <propertyfile file="auto.prop">
+            <entry key="build.last.is.packaging.debug" value="${build.last.is.packaging.debug}" />
+        </propertyfile>
+        <antcall target="-auto">
+        </antcall>
+    </target>
+
+    <target name="auto-release">
+        <antcall target="-auto">
+        </antcall>
+    </target>
+
+    <target name="-auto">
+     <sequential>
+        <!-- 复制项目到临时目录，避免替换打包影响本目录代码 -->
+        <dirname property="auto.here.dir" file="${ant.file}" />
+         <mkdir dir="${output.apk.dir}"/>
+        <delete dir="${auto.here.dir}/bin" />
+        <!-- 解析AndroidManifest.xml 获得包名 -->
+        <xmlproperty file="AndroidManifest.xml" collapseAttributes="true" />
+        <!-- 写入配置文件 -->
+        <propertyfile file="auto.prop">
+            <entry key="auto.package" value="${manifest.package}" />
+            <entry key="auto.final.versionCode" value="${manifest.android:versionCode}" />
+            <entry key="auto.final.versionName" value="${manifest.android:versionName}" />
+        </propertyfile>
+
+        <!-- 检查参数或配置中是否指定了包名 -->
+        <condition property="auto.has.package">
+            <isset property="package" />
+        </condition>
+        <!-- 修改包名  -->
+         <antcall target="-change-package-name">
+        </antcall>
+        <condition property="auto.version.is.time">
+            <equals arg1="${version}" arg2="time" />
+        </condition>
+        <!-- 修改版本号 -->
+        <antcall target="-change-version">
+        </antcall>
+ 
+        <condition property="build.last.target" value="debug" else="release">
+            <istrue value="${build.last.is.packaging.debug}" />
+        </condition>
+        <echo message="build.last.target:${build.last.target}" />
+        <!-- 执行ant debug或者ant release进行打包 -->
+
+		<antcall target="-package-market-channels">
+        </antcall>
+         
+         
+        <!-- 复制打好的包 到 本目录下 
+        <antcall target="-cp-out-final-file">
+        </antcall>-->
+        <property file="auto.prop" />
+        <echo message="package: ${auto.package}" />
+        <echo message="UMENG_CHANNEL : ${auto.umeng.channel}" />
+        <echo message="versionCode: ${auto.final.versionCode}" />
+        <echo message="versionName: ${auto.final.versionName}" />
+      </sequential>
+    </target>
+    <target name="-package-unsigned-apk">
+    	  <exec executable="ant.bat">
+		         <!--   <arg value="${build.last.target}" /> -->
+		            <arg value="mannel-release" />
+		    </exec>
+    </target>    
+    <target name="-change-package-name" if="auto.has.package">
+        <propertyfile file="auto.prop">
+            <entry key="auto.package" value="${package}" />
+        </propertyfile>
+        <echo message="old package: ${manifest.package}" />
+        <echo message="new package: ${package}" />
+        <replace dir="${auto.here.dir}" excludes="build.xml" token="${manifest.package}" value="${package}">
+        </replace>
+    </target>
+    
+    <target name="-change-umeng-channel">
+        <condition property="UMENG_CHANNEL" value="debug" else="release">
+            <istrue value="${build.last.is.packaging.debug}" />
+        </condition>
+        <propertyfile file="auto.prop">
+            <entry key="auto.umeng.channel" value="${UMENG_CHANNEL}" />
+        </propertyfile>
+        <echo message="UMENG_CHANNEL : ${UMENG_CHANNEL}" />
+        <replaceregexp encoding="utf-8" file="${auto.here.dir}/AndroidManifest.xml"
+           match="&lt;meta\-data(\s+)android:name=&quot;UMENG_CHANNEL&quot;(\s+)android:value=&quot;[a-zA-Z0-9]+&quot;"
+           replace="&lt;meta\-data android:name=&quot;UMENG_CHANNEL&quot; android:value=&quot;${UMENG_CHANNEL}&quot;"
+        />
+    </target>
+    
+    <!-- 使用时间戳作为版本数字，使用日期作为版本名，比如Ubuntu 13.04使用yy.MM，MIUI 4.1.17使用年的最后一位.M.d
+        本脚本使用 yy.M.d.HHmm，比如14.1.1.1800 表示 14年1月1日18点00分。
+        由于开发时经常发布版本，所以精确到分钟。可能几分钟前刚打的包，改了字符串，又重新打包。
+    -->
+    <target name="-change-version" if="auto.version.is.time">
+        <script language="javascript">
+            <![CDATA[
+                property = project.setProperty("now",Math.floor((new Date()).getTime()/1000));
+            ]]>
+        </script>
+        <tstamp>
+            <format property="auto.final.versionCode"
+                  pattern="${now}" />
+            <format property="auto.final.versionName"
+                  pattern="yy.M.d.HHmm" />
+        </tstamp>
+        <propertyfile file="auto.prop">
+            <entry key="auto.final.versionCode" value="${auto.final.versionCode}" />
+            <entry key="auto.final.versionName" value="${auto.final.versionName}" />
+        </propertyfile>
+        <echo message="versionCode: ${auto.final.versionCode}" />
+        <echo message="versionName: ${auto.final.versionName}" />
+        <replaceregexp file="${auto.here.dir}/AndroidManifest.xml"
+           match="android:versionCode=&quot;(\d+)&quot;"
+           replace="android:versionCode=&quot;${auto.final.versionCode}&quot;"
+        />
+        <replaceregexp file="${auto.here.dir}/AndroidManifest.xml"
+           match="android:versionName=&quot;([a-zA-Z0-9\.]+)&quot;"
+           replace="android:versionName=&quot;${auto.final.versionName}&quot;"
+        />
+    </target>
+
+    <target name="-cp-out-final-file">
+        <property file="auto.prop" />
+        <condition property="build.last.target" value="debug" else="release">
+            <istrue value="${build.last.is.packaging.debug}" />
+        </condition>
+    
+    </target>
+     
+   <target name="-pre-compile">
+		<echo message="JARPATH=${toString:project.all.jars.path}"></echo>
+		
+		
+		      <property name="baidulib.dir" value="D:/library_project"> </property>
+				 <path id="baidulib.lib">
+		        <pathelement location="${baidulib.dir}/zxing.jar"></pathelement>
+		        <pathelement location="${baidulib.dir}/fastjson-1.2.3.jar"></pathelement>
+		        <pathelement location="${baidulib.dir}/pushservice-4.5.1.8.jar"></pathelement>
+		    </path>
+		    <path id="userlibrary.lib">
+		    	<path refid="baidulib.lib"/>
+		    </path>
+		    <echo message="JARPATH=${toString:baidulib.lib}"></echo>
+    </target>
+    
+    <target name="mannel-release"  depends="-set-release-mode, -release-obfuscation-check, -dex, -post-package, -release-prompt-for-password"
+                description="Builds the application in release mode.">
+    </target>
+    <target name="-package-market-channels" depends="-package-unsigned-apk">
+    	 <condition property="CHANNELS" value="${UMENG_CHANNEL}" else="${umeng_channels}">
+            <isset property="UMENG_CHANNEL"/>
+       </condition>
+    	<foreach target="package-one-channel" list="${CHANNELS}" delimiter="," param="channelname"></foreach>
+    </target>
+    <target name="package-one-channel" if="has.keystore">
+      	<propertyregex override="true" property="channelname" input="${channelname}" regexp="(.*):" select="\1"/>
+        <do-only-if-not-library elseText="Library project: do not create apk..." >
+            <sequential>
+            	<dirname property="workspace.here.dir" file="${ant.file}" />
+            	 <property name="unsign.file" location="${workspace.here.dir}/bin/${ant.project.name}-release-unsigned.apk"/>
+                <property name="out.unaligned.file" location="${workspace.here.dir}/bin/${ant.project.name}-${channelname}-unaligned.apk" />
+               <property name="out.final.file" location="${workspace.here.dir}/bin/${ant.project.name}-${channelname}-signed.apk" />
+                <!-- Signs the APK -->
+                <echo level="info">Signing final apk...${out.packaged.file}</echo>
+                 <echo message="UMENG_CHANNEL 渠道号：${channelname} ${unsign.file}"/>
+                <replaceregexp encoding="utf-8" file="AndroidManifest.xml"
+								           match="&lt;meta\-data(\s+)android:name=&quot;UMENG_CHANNEL&quot;(\s+)android:value=&quot;[a-zA-Z0-9]+&quot;"
+								           replace="&lt;meta\-data android:name=&quot;UMENG_CHANNEL&quot; android:value=&quot;${channelname}&quot;"
+								        /> 
+							  <antcall target="-package-channel-resources"></antcall>
+             	  <signapk
+                    input="${unsign.file}"
+                    output="${out.unaligned.file}"
+                    keystore="${key.store}"
+                    storepass="${key.store.password}"
+                    alias="${key.alias}"
+                    keypass="${key.alias.password}"/>
+                <echo level="info">SSign apk over.. </echo>
+                <!-- Zip aligns the APK -->
+                <zipalign-helper
+                        in.package="${out.unaligned.file}"
+                        out.package="${out.final.file}" />
+                <echo level="info">Release Package: ${out.final.file}</echo>
+                <delete file="${out.unaligned.file}" />
+            </sequential>
+        </do-only-if-not-library>
+        <record-build-info />
+    </target>
+    <target name="-package-channel-resources" depends="-set-release-mode, -release-obfuscation-check,-pre-resources, -post-package, -release-prompt-for-password">
+    	 <do-only-if-not-library elseText="Library project: do not package apk..." >
+            <if condition="${build.is.instrumented}">
+                <then>
+                    <package-helper>
+                        <extra-jars>
+                            <!-- Injected from external file -->
+                            <jarfile path="${emma.dir}/emma_device.jar" />
+                        </extra-jars>
+                    </package-helper>
+                </then>
+                <else>
+                    <package-helper />
+                </else>
+            </if>
+        </do-only-if-not-library>
+    </target>
+    <target name="-pre-resources" depends="-pre-javac, -package-resources">
+   </target>
+   <target name="-pre-javac" depends="-pre-build, -build-setup, -code-gen, -pre-compile">
+   	</target>
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties">  
+        <classpath>  
+            <pathelement location="${env.ANT_HOME}/lib/ant-contrib-1.0b3.jar" />  
+        </classpath>  
+    </taskdef> 
+    <property name="sdk-tool-dir" value="${sdk.dir}/build-tools/19.1.0"/>
+    <property name="jarsigner" value="${env.JAVA_HOME}/bin/jarsigner.exe"/>
+    <property name="zipalign" value="${sdk-tool-dir}/zipalign.exe"/>
+    <property name="aapt" value="${sdk-tool-dir}/aapt.exe"/>
+  </project>
