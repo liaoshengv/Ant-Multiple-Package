@@ -13,16 +13,17 @@ Ant多渠道打包说明文档
 
 1 使用前期事项
 	将ant,auto, build,custom_rules，log4j文件放到项目文件目录下。
-	 文件说明：ant文件中
-    key.store=加密文件
-	key.alias=alias名称
-	key.store.password=加密密码
-	key.alias.password=alias密码
-	umeng_channels=baidu,google,umeng  //渠道包，用逗号分隔
-	output.apk.dir=F:\\output_apk   //打包文件输出路径，这个可设可不设。
-	Log4j是日志输出文件
-	build是ant基本配置文件
-	custom_rules是项目主要工作文件
+	 文件说明：
+	 ant文件中
+	 key.store=加密文件
+        key.alias=alias名称
+        key.store.password=加密密码
+        key.alias.password=alias密码
+        umeng_channels=baidu,google,umeng  //渠道包，用逗号分隔
+        output.apk.dir=F:\\output_apk   //打包文件输出路径，这个可设可不设。
+        Log4j是日志输出文件
+        build是ant基本配置文件
+        custom_rules是项目主要工作文件
 	
 2 在使用前先在项目目录中执行官方命令打包
 
