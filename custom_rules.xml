@@ -75,12 +75,6 @@
         <echo message="versionName: ${auto.final.versionName}" />
       </sequential>
     </target>
-    <target name="-package-unsigned-apk">
-    	  <exec executable="ant.bat">
-		         <!--   <arg value="${build.last.target}" /> -->
-		            <arg value="mannel-release" />
-		    </exec>
-    </target>    
     <target name="-change-package-name" if="auto.has.package">
         <propertyfile file="auto.prop">
             <entry key="auto.package" value="${package}" />
@@ -91,7 +85,7 @@
         </replace>
     </target>
     
-    <target name="-change-umeng-channel">
+   <!-- <target name="-change-umeng-channel">
         <condition property="UMENG_CHANNEL" value="debug" else="release">
             <istrue value="${build.last.is.packaging.debug}" />
         </condition>
@@ -104,7 +98,7 @@
            replace="&lt;meta\-data android:name=&quot;UMENG_CHANNEL&quot; android:value=&quot;${UMENG_CHANNEL}&quot;"
         />
     </target>
-    
+    -->
     <!-- 使用时间戳作为版本数字，使用日期作为版本名，比如Ubuntu 13.04使用yy.MM，MIUI 4.1.17使用年的最后一位.M.d
         本脚本使用 yy.M.d.HHmm，比如14.1.1.1800 表示 14年1月1日18点00分。
         由于开发时经常发布版本，所以精确到分钟。可能几分钟前刚打的包，改了字符串，又重新打包。
@@ -158,13 +152,13 @@
 		    <path id="userlibrary.lib">
 		    	<path refid="baidulib.lib"/>
 		    </path>
-		    <echo message="JARPATH=${toString:baidulib.lib}"></echo>
+		    <echo message="JARPATH=${toString:project.all.jars.path}"></echo>
     </target>
     
-    <target name="mannel-release"  depends="-set-release-mode, -release-obfuscation-check, -dex, -post-package, -release-prompt-for-password"
+    <target name="mannel-release"  depends="-set-release-mode, -release-obfuscation-check, -dex,-crunch, -post-package, -release-prompt-for-password"
                 description="Builds the application in release mode.">
     </target>
-    <target name="-package-market-channels" depends="-package-unsigned-apk">
+    <target name="-package-market-channels" depends="mannel-release">
     	 <condition property="CHANNELS" value="${UMENG_CHANNEL}" else="${umeng_channels}">
             <isset property="UMENG_CHANNEL"/>
        </condition>
@@ -180,12 +174,14 @@
                <property name="out.final.file" location="${workspace.here.dir}/bin/${ant.project.name}-${channelname}-signed.apk" />
                 <!-- Signs the APK -->
                 <echo level="info">Signing final apk...${out.packaged.file}</echo>
+                	<echo message="${out.manifest.abs.file}"/>
                  <echo message="UMENG_CHANNEL 渠道号：${channelname} ${unsign.file}"/>
-                <replaceregexp encoding="utf-8" file="AndroidManifest.xml"
+                 	<echo message="${out.manifest.abs.file}"/>
+                <replaceregexp encoding="utf-8" file="${workspace.here.dir}/bin/AndroidManifest.xml"
 								           match="&lt;meta\-data(\s+)android:name=&quot;UMENG_CHANNEL&quot;(\s+)android:value=&quot;[a-zA-Z0-9]+&quot;"
 								           replace="&lt;meta\-data android:name=&quot;UMENG_CHANNEL&quot; android:value=&quot;${channelname}&quot;"
 								        /> 
-							  <antcall target="-package-channel-resources"></antcall>
+							  <antcall target="-package-unsigned-apk"></antcall>
              	  <signapk
                     input="${unsign.file}"
                     output="${out.unaligned.file}"
@@ -204,7 +200,46 @@
         </do-only-if-not-library>
         <record-build-info />
     </target>
-    <target name="-package-channel-resources" depends="-set-release-mode, -release-obfuscation-check,-pre-resources, -post-package, -release-prompt-for-password">
+    <!--打包资源文件-->
+    <target name="-package-resources" depends="-set-release-mode,-pre-build,-build-setup">
+    	<do-only-if-not-library elseText="Library project: do not package resources..." >
+        	<echo message="${out.manifest.abs.file}"/>
+        	<echo message="${build.is.packaging.debug}"/>
+        	<echo message="${asset.absolute.dir}"/>
+        	<echo message="${project.target.android.jar}"/>
+        	<echo message="${out.absolute.dir}"/>
+        	<echo message="${build.packaging.nocrunch}"/>
+        	<echo message="${resource.package.file.name}"/>
+        	<echo message="${aapt.resource.filter}"/>
+        	<echo message="${out.res.absolute.dir}"/>
+        	<echo message="${resource.absolute.dir}"/>
+            <aapt executable="${aapt}"
+                    command="package"
+                    versioncode="${version.code}"
+                    versionname="${version.name}"
+                    debug="${build.is.packaging.debug}"
+                    manifest="${out.manifest.abs.file}"
+                    assets="${asset.absolute.dir}"
+                    androidjar="${project.target.android.jar}"
+                    apkfolder="${out.absolute.dir}"
+                    nocrunch="${build.packaging.nocrunch}"
+                    resourcefilename="${resource.package.file.name}"
+                    resourcefilter="${aapt.resource.filter}"
+                    libraryResFolderPathRefid="project.library.res.folder.path"
+                    libraryPackagesRefid="project.library.packages"
+                    libraryRFileRefid="project.library.bin.r.file.path"
+                    previousBuildType="${build.last.target}"
+                    buildType="${build.target}"
+                    ignoreAssets="${aapt.ignore.assets}">
+                <res path="${out.res.absolute.dir}" />
+                <res path="${resource.absolute.dir}" />
+                <!-- <nocompress /> forces no compression on any files in assets or res/raw -->
+                <!-- <nocompress extension="xml" /> forces no compression on specific file extensions in assets and res/raw -->
+            </aapt>
+        </do-only-if-not-library>
+    	</target>
+    	<!--打包生成未签名包-->
+    <target name="-package-unsigned-apk" depends="-package-resources">
     	 <do-only-if-not-library elseText="Library project: do not package apk..." >
             <if condition="${build.is.instrumented}">
                 <then>
@@ -221,8 +256,7 @@
             </if>
         </do-only-if-not-library>
     </target>
-    <target name="-pre-resources" depends="-pre-javac, -package-resources">
-   </target>
+
    <target name="-pre-javac" depends="-pre-build, -build-setup, -code-gen, -pre-compile">
    	</target>
     <taskdef resource="net/sf/antcontrib/antcontrib.properties">  
